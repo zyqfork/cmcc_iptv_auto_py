@@ -181,6 +181,36 @@ def normalize_url(url, trailing_slash='keep'):
             url = url.rstrip('/')
             
     return url
+
+def ensure_url_scheme(url, default_scheme='http'):
+    """
+    确保URL包含协议前缀，如果没有则添加默认协议
+    兼容不同Python版本的urlparse行为
+    使用字符串检查而不是urlparse，更可靠
+    :param url: 要处理的URL
+    :param default_scheme: 默认协议（默认为 'http'）
+    :return: 包含协议前缀的URL
+    """
+    if not url:
+        return url
+    
+    # 转换为字符串（防止其他类型）
+    url = str(url).strip()
+    
+    if not url:
+        return url
+    
+    # 如果已经有协议前缀（包含 ://），直接返回
+    if '://' in url:
+        return url
+    
+    # 如果没有协议前缀，添加默认协议
+    # 兼容处理：去除可能的前导斜杠
+    url = url.lstrip('/')
+    if url:
+        return f"{default_scheme}://{url}"
+    else:
+        return url
 # 应用规范化
 REPLACEMENT_IP_NORM = normalize_url(REPLACEMENT_IP, trailing_slash='add')
 CATCHUP_SOURCE_PREFIX_NORM = normalize_url(CATCHUP_SOURCE_PREFIX, trailing_slash='remove')
@@ -851,15 +881,26 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
     
     catchup_enabled_count = 0
     
-    # --- 改进的代理处理逻辑 ---
+    # --- 改进的代理处理逻辑（使用简单字符串拼接，兼容性更好）---
     # 默认使用原始回看前缀
     final_catchup_prefix = CATCHUP_SOURCE_PREFIX_NORM
     
     # 如果设置了代理前缀，并且回看前缀也存在
     if NGINX_PROXY_PREFIX_NORM and CATCHUP_SOURCE_PREFIX_NORM:
-        source_parts = urlparse(CATCHUP_SOURCE_PREFIX_NORM)
-        source_path_part = source_parts.netloc + source_parts.path
-        final_catchup_prefix = urljoin(NGINX_PROXY_PREFIX_NORM, source_path_part)
+        # 提取回看源的路径部分（去除协议和域名）
+        if CATCHUP_SOURCE_PREFIX_NORM.startswith('http://'):
+            catchup_path = CATCHUP_SOURCE_PREFIX_NORM[7:]
+        elif CATCHUP_SOURCE_PREFIX_NORM.startswith('https://'):
+            catchup_path = CATCHUP_SOURCE_PREFIX_NORM[8:]
+        else:
+            catchup_path = CATCHUP_SOURCE_PREFIX_NORM
+        
+        # 确保路径不以斜杠开头，避免重复斜杠
+        if catchup_path.startswith('/'):
+            catchup_path = catchup_path[1:]
+        
+        # 组合成新的代理回看前缀
+        final_catchup_prefix = NGINX_PROXY_PREFIX_NORM + catchup_path
         print(f"已将回看源代理至: {final_catchup_prefix}")
     
     # (--- 修改：使用全局输出顺序 ---)
@@ -889,12 +930,28 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
             else:
                 url = ch["zteurl"]
             
-            # 改进的图标URL处理
-            logo_url = ch["icon"]
-            if logo_url and NGINX_PROXY_PREFIX_NORM:
-                logo_parts = urlparse(logo_url)
-                logo_path_part = logo_parts.netloc + logo_parts.path
-                logo_url = urljoin(NGINX_PROXY_PREFIX_NORM, logo_path_part)
+            # 改进的图标URL处理（使用简单字符串拼接，兼容性更好）
+            logo_url = ch.get("icon", "")
+            if logo_url:
+                # 如果设置了代理前缀，则通过代理访问
+                if NGINX_PROXY_PREFIX_NORM:
+                    # 提取图标的路径部分
+                    if logo_url.startswith('http://'):
+                        logo_path = logo_url[7:]
+                    elif logo_url.startswith('https://'):
+                        logo_path = logo_url[8:]
+                    else:
+                        logo_path = logo_url
+                    
+                    # 确保路径不以斜杠开头，避免重复斜杠
+                    if logo_path.startswith('/'):
+                        logo_path = logo_path[1:]
+                    
+                    # 组合代理URL
+                    logo_url = NGINX_PROXY_PREFIX_NORM + logo_path
+                else:
+                    # 如果没有代理前缀，确保URL有协议前缀
+                    logo_url = ensure_url_scheme(logo_url)
             
             #  修改：使用清理后的 tvg-id
             cleaned_tvg_id = clean_tvg_id(ch.get("original_title", ch["title"]))
@@ -915,6 +972,8 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
                         prefix=final_catchup_prefix,
                         ztecode=ztecode
                     )
+                    # 确保生成的catchup_source有协议前缀（保险起见）
+                    catchup_source = ensure_url_scheme(catchup_source)
                     
                     extinf_parts.append(f'catchup="default"')
                     extinf_parts.append(f'catchup-source="{catchup_source}"')
