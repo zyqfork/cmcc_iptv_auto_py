@@ -40,9 +40,9 @@ All primary configurations are located at the beginning of the `tv.py` script un
 
 ### URLs and Prefixes
 
-*   `REPLACEMENT_IP`: UDPXY address for converting multicast to unicast (e.g., "http://op.bennq.top:7088/udp").
+*   `REPLACEMENT_IP`: UDPXY address for converting multicast to unicast (e.g., "http://c.cc.top:7088/udp").
 *   `CATCHUP_SOURCE_PREFIX`: Base URL for catch-up content (e.g., "http://183.235.162.80:6610/190000002005").
-*   `NGINX_PROXY_PREFIX`: Nginx proxy address for external access (e.g., "http://op.bennq.top:7077/").
+*   `NGINX_PROXY_PREFIX`: Nginx proxy address for external access (e.g., "http://c.cc.top:7077/").
 *   `JSON_URL`: URL to download the main channel list in JSON format (e.g., "http://183.235.16.92:8082/epg/api/custom/getAllChannel.json").
 *   `M3U_EPG_URL`: URL for the EPG source to be included in the M3U header (e.g., "https://epg.112114.xyz/pp.xml").
 *   `CATCHUP_URL_TEMPLATE`: Template for standard catch-up URLs.
@@ -51,8 +51,8 @@ All primary configurations are located at the beginning of the `tv.py` script un
 ## 确保
 *   确保生成m3u单播地址是 REPLACEMENT_IP + rtp 组播地址 ,并忽略因为REPLACEMENT_IP 最后是否带有/ 的问题导致错误
 *   其他回看 ,nginx 生成的地址同上,忽略 /,以下是ku9 生成示例
-    *   #EXTINF:-1 tvg-id="CCTV13" tvg-name="CCTV-13高清" tvg-logo="http://op.bennq.top:7077/183.235.16.92:8081/pics/micro-picture/channel/2021-04-23/d1db76fe-8f2f-47c3-b1dd-7245ce6755b2.png" catchup="default" catchup-source="http://op.bennq.top:7077/183.235.162.80:6610/190000002005/ch000000000000329/index.m3u8?starttime=${(b)yyyyMMddHHmmss|UTC}&endtime=${(e)yyyyMMddHHmmss|UTC}" group-title="央视",CCTV-13新闻
-        http://op.bennq.top:7088/udp/239.21.0.88:3692
+    *   #EXTINF:-1 tvg-id="CCTV13" tvg-name="CCTV-13高清" tvg-logo="http://c.cc.top:7077/183.235.16.92:8081/pics/micro-picture/channel/2021-04-23/d1db76fe-8f2f-47c3-b1dd-7245ce6755b2.png" catchup="default" catchup-source="http://c.cc.top:7077/183.235.162.80:6610/190000002005/ch000000000000329/index.m3u8?starttime=${(b)yyyyMMddHHmmss|UTC}&endtime=${(e)yyyyMMddHHmmss|UTC}" group-title="央视",CCTV-13新闻
+        http://c.cc.top:7088/udp/239.21.0.88:3692
 *   输出尽量使用中文
 
 
