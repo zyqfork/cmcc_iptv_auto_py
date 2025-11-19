@@ -31,7 +31,7 @@ KU9_M3U_FILENAME = "ku9.m3u"      #  KU9回看参数格式文件
 XML_FILENAME = "t.xml"            # XML节目单文件
 REPLACEMENT_IP = "http://c.cc.top:7088/udp"  # UDPXY地址，
 CATCHUP_SOURCE_PREFIX = "http://183.235.162.80:6610/190000002005"  # 回看源前缀，
-NGINX_PROXY_PREFIX = "http://c.cc.top:7077"  # 针对外网播放的nginx代理
+NGINX_PROXY_PREFIX = ""  # 针对外网播放的nginx代理 http://c.cc.top:7077
 JSON_URL = "http://183.235.16.92:8082/epg/api/custom/getAllChannel.json" # JSON 文件下载 URL  这个地址有晴彩
 
 #  EPG 地址配置 - 可自定义修改

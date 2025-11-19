@@ -62,7 +62,7 @@ REPLACEMENT_IP = "http://c.top:7088/udp"
 # 回看源前缀
 CATCHUP_SOURCE_PREFIX = "http://183.235.162.80:6610/190000002005"
 
-# Nginx代理前缀（用于外网访问）
+# Nginx代理前缀（用于外网访问）默认为空 ""
 NGINX_PROXY_PREFIX = "http://c.top:7077"
 
 # JSON数据源地址
@@ -121,12 +121,14 @@ BLACKLIST_RULES = {
 ```json
 {
     "广东地方台": [
-        {
-            "title": "广州新闻高清",
-            "code": "02000006000000052022060699000003",
-            "ztecode": "ch000000000000104",
-            "zteurl": "rtp://239.21.0.137:3892",
-            "icon": "http://183.235.16.92:8081/pics/micro-picture/channelNew/xxx.png"
+            {
+        "title": "韶关综合高清",
+        "code": "02000004000000052014120300000003",
+        "ztecode": "",
+        "icon": "http://183.235.16.92:8081/pics/micro-picture/channel/2020-11-04/e56deee4-990e-443d-8568-0f01953aed53.png",
+        "zteurl": "rtp://239.11.0.84:1025",
+        "supports_catchup": false,
+        "quality": "高清"
         }
     ]
 }
@@ -145,9 +147,19 @@ BLACKLIST_RULES = {
         "CCTV-2财经",
         "CCTV-3综艺"
     ],
+
     "广东": [
-        "广东卫视",
-        "广东珠江"
+        "广东珠江高清",
+        "广东体育高清",
+        "广东新闻高清",
+        "东莞新闻综合高清",
+        "东莞生活资讯高清",
+        "广州新闻高清",
+        "广州综合高清",
+        "广东卫视高清",
+        "广东民生高清",
+        "经济科教高清",
+        "大湾区卫视高清"
     ]
 }
 ```

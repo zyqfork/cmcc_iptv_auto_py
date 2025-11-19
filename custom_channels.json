@@ -9,6 +9,15 @@
       "supports_catchup": true,
       "quality": "高清"
     },
+        {
+      "title": "南国都市4K",
+      "code": "02000006000000052022042799000002",
+      "ztecode": "ch000000000000373",
+      "icon": "http://183.235.11.40:8081/pics/micro-picture/channelNew/02000006000000052022042799000002.png",
+      "zteurl": "rtp://239.21.0.132:3872",
+      "supports_catchup": false,
+      "quality": "4k"
+    },
     {
       "title": "东莞生活资讯高清",
       "code": "02000006000000052022060699000004",
@@ -19,28 +28,28 @@
       "quality": "高清"
     },
     {
-      "title": "广州新闻-测试",
-      "code": "02000001000000050000000000000278",
+      "title": "广州新闻高清",
+      "code": "02000006000000052022011999000007",
       "ztecode": "",
-      "icon": "http://183.235.16.92:8081/pics/micro-picture/channel/2022-01-24/e2662c03-e9d5-41a3-9c9b-bcbad20041c1.png",
+      "icon": "http://183.235.11.40:8081/pics/micro-picture/channelNew/02000006000000052022011999000002.png",
       "zteurl": "rtp://239.11.0.139:1025",
       "supports_catchup": false,
       "quality": "高清"
     },
     {
-      "title": "广州综合-测试",
-      "code": "02000001000000050000000000000413",
+      "title": "广州综合高清",
+      "code": "02000006000000052022011999000006",
       "ztecode": "",
-      "icon": "http://183.235.16.92:8081/pics/micro-picture/channel/2022-01-24/a07be909-5ee9-422a-8289-5fcf6f26734d.png",
+      "icon": "http://183.235.11.40:8081/pics/micro-picture/channelNew/02000006000000052022011999000001.png",
       "zteurl": "rtp://239.11.0.138:1025",
       "supports_catchup": false,
       "quality": "高清"
     },
     {
       "title": "广州法治高清",
-      "code": "custom_gzfz",
+      "code": "02000006000000052022011999000009",
       "ztecode": "",
-      "icon": "http://183.235.16.92:8081/pics/micro-picture/channel/2022-01-24/8e4502e5-2a1b-4f05-b26a-e3e4e90ff14f.png",
+      "icon": "http://183.235.11.40:8081/pics/micro-picture/channelNew/02000006000000052022011999000004.png",
       "zteurl": "rtp://239.11.0.141:1025",
       "supports_catchup": false,
       "quality": "高清"
@@ -192,7 +201,7 @@
       "quality": "高清"
     },
     {
-      "title": "揭阳公共高清",
+      "title": "揭阳文化生活高清",
       "code": "02000006000000052020123099000002",
       "ztecode": "ch000000000000333",
       "icon": "http://183.235.16.92:8081/pics/micro-picture/channel/2021-01-14/9c5c5481-dd95-4716-9373-d05b601f8235.png",
