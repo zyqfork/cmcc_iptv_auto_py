@@ -711,7 +711,8 @@ def _build_xmltv_tree(channels_for_xml, all_schedules):
                 channel.set("id", channel_id)
                 
                 display_name = ET.SubElement(channel, "display-name")
-                display_name.text = channel_entry.get("title", channel_info.get("title", UNKNOWN_CHANNEL))
+                # 使用与M3U tvg-name相同的逻辑：优先使用original_title
+                display_name.text = channel_entry.get("original_title", channel_entry.get("title", channel_info.get("title", UNKNOWN_CHANNEL)))
 
                 if has_schedules:
                     for schedule in schedules:
