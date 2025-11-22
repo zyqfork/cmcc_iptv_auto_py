@@ -31,11 +31,11 @@ KU9_M3U_FILENAME = "ku9.m3u"      #  KU9回看参数格式文件
 XML_FILENAME = "t.xml"            # XML节目单文件
 REPLACEMENT_IP = "http://c.cc.top:7088/udp"  # UDPXY地址，
 CATCHUP_SOURCE_PREFIX = "http://183.235.162.80:6610/190000002005"  # 回看源前缀，
-NGINX_PROXY_PREFIX = ""  # 针对外网播放的nginx代理 http://c.cc.top:7077
+NGINX_PROXY_PREFIX = ""  # 针对外网播放的nginx代理
 JSON_URL = "http://183.235.16.92:8082/epg/api/custom/getAllChannel.json" # JSON 文件下载 URL  这个地址有晴彩
 
 #  EPG 地址配置 - 可自定义修改
-M3U_EPG_URL = "https://epg.112114.xyz/pp.xml"  # 请修改为你的实际 EPG 地址
+M3U_EPG_URL = "http://debian.bennq.top:6789/t.xml.gz"  # 请修改为你的实际 EPG 地址
 # (新增) EPG 下载源地址 (可以配置多个, 任务会自动分配)
 EPG_BASE_URLS = [
     "http://183.235.16.92:8082/epg/api/channel/",
@@ -49,6 +49,11 @@ CATCHUP_URL_KU9 = "{prefix}/{ztecode}/index.m3u8?starttime=${{(b)yyyyMMddHHmmss|
 # 自定义配置文件
 CHANNEL_ORDER_FILE = "channel_order.json"        # 频道排序文件
 CUSTOM_CHANNELS_FILE = "custom_channels.json"    # 自定义频道文件
+
+# 外部 M3U 合并配置
+EXTERNAL_M3U_URL = "https://bc.188766.xyz/?ip=&mishitong=true&mima=mianfeibuhuaqian&json=true"  # 外部 M3U 下载链接
+EXTERNAL_GROUP_TITLES = ["粤语频道"]  # 要提取的 group-title 列表，例如: ["冰茶体育", "粤语频道"]
+ENABLE_EXTERNAL_M3U_MERGE = True  # 是否合并外部 M3U 到所有 M3U 文件 (True/False)
 
 #  扩展黑名单配置 - 支持按 title、code 或 zteurl 过滤
 BLACKLIST_RULES = {
@@ -131,12 +136,13 @@ GROUP_CLASSIFICATION_PRIORITY = [
 # 3. 定义 M3U 和 XML 文件中的 *输出顺序*  (你可以随意排列这里的顺序，"少儿" 重排序)
 GROUP_OUTPUT_ORDER = [
     "央视",
+    "粤语频道",
+    "广东",
     "央视特色",
     "少儿",  # <--- "少儿" 重排序
-    "广东",
     "卫视",
-    "CGTN",
     "华数咪咕",
+    "CGTN",
     "超清4k",
     "其他",
     "广东地方台"
@@ -251,12 +257,16 @@ def print_configuration():
     print(f"EPG下载开关: {'启用' if ENABLE_EPG_DOWNLOAD else '禁用'}")
     if ENABLE_EPG_DOWNLOAD:
         print(f"EPG下载配置: 重试{EPG_DOWNLOAD_RETRY_COUNT}次, 超时{EPG_DOWNLOAD_TIMEOUT}秒, 间隔{EPG_DOWNLOAD_RETRY_DELAY}秒")
+    print(f"外部M3U合并开关: {'启用' if ENABLE_EXTERNAL_M3U_MERGE else '禁用'}")
+    if ENABLE_EXTERNAL_M3U_MERGE:
+        print(f"外部M3U地址: {EXTERNAL_M3U_URL}")
+        print(f"提取的分组: {', '.join(EXTERNAL_GROUP_TITLES) if EXTERNAL_GROUP_TITLES else '(未配置)'}")
 
-def download_with_retry(url, max_retries=EPG_DOWNLOAD_RETRY_COUNT, timeout=EPG_DOWNLOAD_TIMEOUT):
+def download_with_retry(url, max_retries=EPG_DOWNLOAD_RETRY_COUNT, timeout=EPG_DOWNLOAD_TIMEOUT, headers=None):
     """ 带重试机制的下载函数"""
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, timeout=timeout)
+            response = requests.get(url, timeout=timeout, headers=headers)
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
@@ -874,7 +884,183 @@ def run_epg_download(channels, custom_channels_config, grouped_channels):
     download_and_save_all_schedules(channels_to_write_to_xml)
     # --- EPG 函数内容结束 ---
 
-def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP_URL_TEMPLATE):
+def download_external_m3u(url):
+    """
+    下载外部 M3U 文件（使用浏览器头部模拟浏览器请求）
+    :param url: M3U 文件的下载链接
+    :return: M3U 文件内容（字符串）或 None
+    """
+    try:
+        print(f"正在下载外部 M3U 文件: {url}")
+        # 模拟浏览器的 HTTP 头部信息，避免 403 Forbidden 错误
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'max-age=0'
+        }
+        response = download_with_retry(url, max_retries=3, timeout=30, headers=headers)
+        if response:
+            content = response.text
+            print(f"成功下载外部 M3U 文件，大小: {len(content)} 字节")
+            return content
+        return None
+    except Exception as e:
+        print(f"下载外部 M3U 文件失败: {e}")
+        return None
+
+def parse_m3u_content(m3u_content, target_groups):
+    """
+    解析 M3U 内容，提取指定 group-title 的频道，并应用黑名单过滤
+    :param m3u_content: M3U 文件内容（字符串）
+    :param target_groups: 要提取的 group-title 列表
+    :return: (提取的频道列表, 被过滤的黑名单频道列表)
+    """
+    if not m3u_content or not target_groups:
+        return [], []
+    
+    # 将目标分组转换为集合，提高查找效率
+    target_groups_set = set(target_groups)
+    
+    channels = []
+    blacklisted_channels = []
+    lines = m3u_content.strip().split('\n')
+    i = 0
+    
+    # 跳过文件头
+    if lines and lines[0].startswith('#EXTM3U'):
+        i = 1
+    
+    current_channel = None
+    
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        if line.startswith('#EXTINF'):
+            # 解析 EXTINF 行
+            current_channel = {
+                'extinf_line': line,
+                'extra_lines': [],  # 存储 #EXTVLCOPT, #KODIPROP 等额外行
+                'attributes': {},
+                'url': None,
+                'title': '',
+                'group_title': ''
+            }
+            
+            # 提取标题（最后一个逗号后的内容）
+            if ',' in line:
+                title_part = line.split(',')[-1]
+                current_channel['title'] = title_part.strip()
+            
+            # 解析属性（tvg-id, tvg-name, tvg-logo, group-title, http-referer 等）
+            # 使用正则表达式提取属性，支持多种属性格式
+            # 匹配 key="value" 格式
+            attr_pattern = r'(\S+?)="([^"]*)"'
+            matches = re.findall(attr_pattern, line)
+            for attr_name, attr_value in matches:
+                current_channel['attributes'][attr_name] = attr_value
+                if attr_name == 'group-title':
+                    current_channel['group_title'] = attr_value
+            
+        elif line.startswith('#') and not line.startswith('#EXTINF') and current_channel:
+            # 这是额外的属性行（如 #EXTVLCOPT, #KODIPROP 等）
+            current_channel['extra_lines'].append(line)
+            
+        elif line and not line.startswith('#') and current_channel:
+            # 这是 URL 行
+            current_channel['url'] = line.strip()
+            
+            # 检查 group-title 是否在目标列表中
+            if current_channel['group_title'] in target_groups_set:
+                # 构建用于黑名单检查的频道对象（兼容 is_blacklisted 函数）
+                channel_for_check = {
+                    'title': current_channel['title'],
+                    'zteurl': current_channel['url']
+                }
+                
+                # 应用黑名单过滤
+                if is_blacklisted(channel_for_check):
+                    blacklisted_channels.append({
+                        'title': current_channel['title'],
+                        'code': '',
+                        'reason': '黑名单规则匹配',
+                        'source': '外部M3U'
+                    })
+                    current_channel = None
+                    i += 1
+                    continue
+                
+                # 创建一个新的字典副本，避免引用问题
+                channel_copy = current_channel.copy()
+                channel_copy['extra_lines'] = current_channel['extra_lines'].copy()
+                channels.append(channel_copy)
+            
+            current_channel = None
+        
+        i += 1
+    
+    print(f"从外部 M3U 中提取了 {len(channels)} 个频道 (目标分组: {', '.join(target_groups)})")
+    if blacklisted_channels:
+        print(f"已过滤 {len(blacklisted_channels)} 个黑名单外部频道")
+    return channels, blacklisted_channels
+
+def build_external_extinf_line(channel):
+    """
+    构建外部频道的 EXTINF 行，应用 NGINX_PROXY_PREFIX 到 tvg-logo
+    :param channel: 外部频道字典，包含 extinf_line, attributes 和 title
+    :return: 重建的 EXTINF 行（应用了代理的 tvg-logo）
+    """
+    # 获取原始 EXTINF 行和属性
+    original_line = channel.get('extinf_line', '')
+    attributes = channel.get('attributes', {})
+    title = channel.get('title', '')
+    
+    # 如果没有 tvg-logo 属性，直接返回原始行
+    if 'tvg-logo' not in attributes:
+        return original_line
+    
+    # 处理 tvg-logo，应用 NGINX_PROXY_PREFIX（如果设置）
+    logo_url = attributes['tvg-logo']
+    if NGINX_PROXY_PREFIX_NORM and logo_url:
+        # 提取图标的路径部分
+        if logo_url.startswith('http://'):
+            logo_path = logo_url[7:]
+        elif logo_url.startswith('https://'):
+            logo_path = logo_url[8:]
+        else:
+            logo_path = logo_url
+        
+        # 确保路径不以斜杠开头，避免重复斜杠
+        if logo_path.startswith('/'):
+            logo_path = logo_path[1:]
+        
+        # 组合代理URL
+        new_logo_url = NGINX_PROXY_PREFIX_NORM + logo_path
+        
+        # 在原始行中替换 tvg-logo 的值
+        # 使用正则表达式替换 tvg-logo="原值" 为 tvg-logo="新值"
+        logo_pattern = r'tvg-logo="([^"]*)"'
+        new_line = re.sub(logo_pattern, f'tvg-logo="{new_logo_url}"', original_line)
+        return new_line
+    
+    # 如果不需要代理，返回原始行
+    return original_line
+
+def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP_URL_TEMPLATE, external_channels=None):
+    """
+    生成 M3U 内容
+    :param grouped_channels: 本地频道分组字典
+    :param replace_url: 是否替换 URL（组播转单播）
+    :param catchup_template: 回看 URL 模板
+    :param external_channels: 外部频道列表（可选），如果提供则合并到 M3U
+    :return: M3U 文件内容（字符串）
+    """
     if M3U_EPG_URL:
         content = [f'#EXTM3U x-tvg-url="{M3U_EPG_URL}"']
     else:
@@ -904,8 +1090,57 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
         final_catchup_prefix = NGINX_PROXY_PREFIX_NORM + catchup_path
         print(f"已将回看源代理至: {final_catchup_prefix}")
     
+    # 如果提供了外部频道，按分组组织它们
+    external_channels_by_group = {}
+    external_groups_in_order = set()  # 记录在 GROUP_OUTPUT_ORDER 中的外部分组
+    external_groups_not_in_order = set()  # 记录不在 GROUP_OUTPUT_ORDER 中的外部分组
+    
+    if external_channels:
+        for channel in external_channels:
+            group_title = channel.get('group_title', '')
+            if group_title not in external_channels_by_group:
+                external_channels_by_group[group_title] = []
+            external_channels_by_group[group_title].append(channel)
+            
+            # 检查该分组是否在 GROUP_OUTPUT_ORDER 中
+            if group_title in GROUP_OUTPUT_ORDER:
+                external_groups_in_order.add(group_title)
+            else:
+                external_groups_not_in_order.add(group_title)
+    
     # (--- 修改：使用全局输出顺序 ---)
+    # 按照 GROUP_OUTPUT_ORDER 的顺序输出本地频道，并在对应位置输出外部频道
     for group in GROUP_OUTPUT_ORDER:
+        # 如果该分组在 GROUP_OUTPUT_ORDER 中且有外部频道，先输出外部频道
+        if group in external_groups_in_order and group in external_channels_by_group:
+            for channel in external_channels_by_group[group]:
+                # 构建 EXTINF 行（应用 NGINX_PROXY_PREFIX 到 tvg-logo）
+                extinf_line = build_external_extinf_line(channel)
+                content.append(extinf_line)
+                # 添加额外的属性行（如 #EXTVLCOPT, #KODIPROP 等）
+                for extra_line in channel.get('extra_lines', []):
+                    content.append(extra_line)
+                # 处理外部频道 URL，应用 NGINX_PROXY_PREFIX（如果设置）
+                external_url = channel['url']
+                if NGINX_PROXY_PREFIX_NORM and external_url:
+                    # 提取 URL 的路径部分
+                    if external_url.startswith('http://'):
+                        url_path = external_url[7:]
+                    elif external_url.startswith('https://'):
+                        url_path = external_url[8:]
+                    else:
+                        url_path = external_url
+                    
+                    # 确保路径不以斜杠开头，避免重复斜杠
+                    if url_path.startswith('/'):
+                        url_path = url_path[1:]
+                    
+                    # 组合代理 URL
+                    external_url = NGINX_PROXY_PREFIX_NORM + url_path
+                # 添加 URL
+                content.append(external_url)
+        
+        # 输出本地频道
         for ch in grouped_channels.get(group, []):
             
             # 跳过没有播放链接的频道
@@ -986,6 +1221,38 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
             
             content.append(' '.join(extinf_parts))
             content.append(url)
+    
+    # 在最后添加不在 GROUP_OUTPUT_ORDER 中的外部频道（按分组组织）
+    if external_groups_not_in_order:
+        # 按照分组的字母顺序排序，确保输出顺序稳定
+        for group_title in sorted(external_groups_not_in_order):
+            if group_title in external_channels_by_group:
+                for channel in external_channels_by_group[group_title]:
+                    # 构建 EXTINF 行（应用 NGINX_PROXY_PREFIX 到 tvg-logo）
+                    extinf_line = build_external_extinf_line(channel)
+                    content.append(extinf_line)
+                    # 添加额外的属性行（如 #EXTVLCOPT, #KODIPROP 等）
+                    for extra_line in channel.get('extra_lines', []):
+                        content.append(extra_line)
+                    # 处理外部频道 URL，应用 NGINX_PROXY_PREFIX（如果设置）
+                    external_url = channel['url']
+                    if NGINX_PROXY_PREFIX_NORM and external_url:
+                        # 提取 URL 的路径部分
+                        if external_url.startswith('http://'):
+                            url_path = external_url[7:]
+                        elif external_url.startswith('https://'):
+                            url_path = external_url[8:]
+                        else:
+                            url_path = external_url
+                        
+                        # 确保路径不以斜杠开头，避免重复斜杠
+                        if url_path.startswith('/'):
+                            url_path = url_path[1:]
+                        
+                        # 组合代理 URL
+                        external_url = NGINX_PROXY_PREFIX_NORM + url_path
+                    # 添加 URL
+                    content.append(external_url)
             
     print(f"已为 {catchup_enabled_count} 个支持回看的频道添加catchup属性")
     return '\n'.join(content)
@@ -1062,7 +1329,7 @@ def main():
     # 添加自定义频道并获取黑名单信息
     grouped_channels, blacklisted_custom_channels, added_custom_channels = add_custom_channels(grouped_channels, custom_channels_config)
     
-    #  合并所有黑名单频道
+    #  合并所有黑名单频道（外部黑名单会在后面添加）
     all_blacklisted_channels = blacklisted_main_channels + blacklisted_custom_channels
     
     # 应用自定义排序
@@ -1073,24 +1340,65 @@ def main():
         if category not in channel_order:
             grouped_channels[category].sort(key=lambda x: (x["number"], x["title"]))
 
-    #  生成M3U文件 - 现在生成三个文件
+    # 下载并解析外部 M3U（如果启用合并）
+    external_channels = None
+    blacklisted_external_channels = []
+    if ENABLE_EXTERNAL_M3U_MERGE and EXTERNAL_M3U_URL and EXTERNAL_GROUP_TITLES:
+        print(f"\n开始处理外部 M3U 合并...")
+        external_m3u_content = download_external_m3u(EXTERNAL_M3U_URL)
+        if external_m3u_content:
+            external_channels, blacklisted_external_channels = parse_m3u_content(external_m3u_content, EXTERNAL_GROUP_TITLES)
+            if external_channels:
+                print(f"成功提取 {len(external_channels)} 个外部频道，将合并到所有 M3U 文件")
+                # 检查外部分组是否在 GROUP_OUTPUT_ORDER 中
+                for external_group in EXTERNAL_GROUP_TITLES:
+                    if external_group in GROUP_OUTPUT_ORDER:
+                        print(f"外部分组 '{external_group}' 已在输出顺序中，将按顺序输出")
+                    else:
+                        print(f"外部分组 '{external_group}' 不在输出顺序中，将添加到 M3U 文件末尾")
+            else:
+                print(f"警告: 从外部 M3U 中未找到任何匹配的分组频道（目标分组: {', '.join(EXTERNAL_GROUP_TITLES)}）")
+        else:
+            print(f"警告: 无法下载外部 M3U 文件，跳过外部频道合并")
+    elif ENABLE_EXTERNAL_M3U_MERGE:
+        if not EXTERNAL_M3U_URL:
+            print(f"提示: ENABLE_EXTERNAL_M3U_MERGE 已启用，但 EXTERNAL_M3U_URL 未配置，跳过外部频道合并")
+        elif not EXTERNAL_GROUP_TITLES:
+            print(f"提示: ENABLE_EXTERNAL_M3U_MERGE 已启用，但 EXTERNAL_GROUP_TITLES 为空，跳过外部频道合并")
+    
+    # 合并外部黑名单频道到总黑名单
+    all_blacklisted_channels = blacklisted_main_channels + blacklisted_custom_channels + blacklisted_external_channels
+
+    #  生成M3U文件 - 现在生成三个文件（如果启用了外部合并，所有文件都会包含外部频道）
     for filename, replace_url, catchup_template in [
         (TV_M3U_FILENAME, False, CATCHUP_URL_TEMPLATE),      # 组播地址，标准回看模板
         (TV2_M3U_FILENAME, True, CATCHUP_URL_TEMPLATE),      # 单播地址，标准回看模板
         (KU9_M3U_FILENAME, True, CATCHUP_URL_KU9)           #  单播地址，KU9回看模板
     ]:
-        content = generate_m3u_content(grouped_channels, replace_url, catchup_template)
+        content = generate_m3u_content(grouped_channels, replace_url, catchup_template, external_channels)
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
-        print(f"已生成M3U文件: {filename}")
+        external_count = len(external_channels) if external_channels else 0
+        if external_count > 0:
+            print(f"已生成M3U文件: {filename} (包含 {external_count} 个外部频道)")
+        else:
+            print(f"已生成M3U文件: {filename}")
 
     total_channels = sum(len(v) for v in grouped_channels.values())
+    external_count = len(external_channels) if external_channels else 0
+    total_channels_with_external = total_channels + external_count
     
     #  更新统计输出
     print(f"\n已跳过 {skipped_url_count} 个缺少播放链接的频道。")
-    print(f"总共过滤 {len(all_blacklisted_channels)} 个黑名单频道（主JSON: {len(blacklisted_main_channels)}, 自定义: {len(blacklisted_custom_channels)}）")
+    blacklist_info_parts = [f"主JSON: {len(blacklisted_main_channels)}", f"自定义: {len(blacklisted_custom_channels)}"]
+    if blacklisted_external_channels:
+        blacklist_info_parts.append(f"外部: {len(blacklisted_external_channels)}")
+    print(f"总共过滤 {len(all_blacklisted_channels)} 个黑名单频道（{', '.join(blacklist_info_parts)}）")
     
-    print(f"成功生成 {total_channels} 个频道")
+    if external_count > 0:
+        print(f"成功生成 {total_channels} 个本地频道 + {external_count} 个外部频道 = 总计 {total_channels_with_external} 个频道")
+    else:
+        print(f"成功生成 {total_channels} 个频道")
     print(f"单播地址列表: {os.path.abspath(TV2_M3U_FILENAME)}")
     print(f"KU9回看参数列表: {os.path.abspath(KU9_M3U_FILENAME)}")  #  新增输出信息
     
@@ -1149,18 +1457,45 @@ def main():
             f.write("  (无)\n")
         f.write("\n\n")
         
+        # ========== 外部频道处理结果 ==========
+        if ENABLE_EXTERNAL_M3U_MERGE:
+            f.write("【外部 M3U 频道处理结果】\n")
+            f.write(f"{LOG_SEPARATOR}\n\n")
+            
+            f.write(f"1. 黑名单过滤 ({len(blacklisted_external_channels)} 个):\n")
+            if blacklisted_external_channels:
+                for channel in blacklisted_external_channels:
+                    f.write(f"  - 标题: {channel['title']}, 原因: {channel['reason']}\n")
+            else:
+                f.write("  (无)\n")
+            f.write("\n")
+            
+            f.write(f"2. 成功合并 ({external_count} 个):\n")
+            if external_channels:
+                for channel in external_channels:
+                    f.write(f"  - [{channel.get('group_title', '未知分组')}] {channel['title']}\n")
+            else:
+                f.write("  (无)\n")
+            f.write("\n\n")
+        
         # ========== 汇总信息 ==========
         f.write("【处理汇总】\n")
         f.write(f"{LOG_SEPARATOR}\n\n")
         f.write(f"黑名单过滤汇总:\n")
         f.write(f"  - 主JSON频道: {len(blacklisted_main_channels)} 个\n")
         f.write(f"  - 自定义频道: {len(blacklisted_custom_channels)} 个\n")
+        if blacklisted_external_channels:
+            f.write(f"  - 外部频道: {len(blacklisted_external_channels)} 个\n")
         f.write(f"  - 总计: {len(all_blacklisted_channels)} 个\n")
         f.write("\n")
         f.write(f"最终频道统计:\n")
         f.write(f"  - 主JSON保留: {len(kept_channels)} 个\n")
         f.write(f"  - 自定义频道: {len(added_custom_channels)} 个\n")
-        f.write(f"  - 总计: {len(kept_channels) + len(added_custom_channels)} 个\n")
+        if external_count > 0:
+            f.write(f"  - 外部频道: {external_count} 个\n")
+            f.write(f"  - 总计: {total_channels_with_external} 个\n")
+        else:
+            f.write(f"  - 总计: {len(kept_channels) + len(added_custom_channels)} 个\n")
     
     print(f"已生成处理日志: {os.path.abspath(CHANNEL_PROCESSING_LOG)}")
     

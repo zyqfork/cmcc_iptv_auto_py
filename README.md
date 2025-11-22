@@ -13,6 +13,7 @@
 - **🔄 频道去重**：自动去除重复频道，多清晰度的剔除了标清频道，只保留高清/超清/4k版本
 - **🚫 黑名单过滤**：支持按标题关键词、频道代码(code)或播放链接(zteurl)过滤频道
 - **➕ 自定义频道合并**：通过 `custom_channels.json` 添加自定义频道
+- **🔗 外部 M3U 合并**：支持从外部 M3U 源下载并合并指定分组的频道（如粤语频道、体育频道等），自动应用黑名单过滤和 Nginx 代理
 - **📊 分组排序**：通过 `channel_order.json` 自定义各分组内频道的排序
 - **🏷️ 频道名称映射**：支持频道名称映射（如 "CCTV-3高清" → "CCTV-3综艺"），只修改最后名字，tvg-id tvg-name 适配不影响EPG对齐
 
@@ -97,6 +98,36 @@ EPG_DOWNLOAD_MODE = "M3U_ONLY"  # "M3U_ONLY" 或 "ALL"
 # EPG合成模式
 XML_SKIP_CHANNELS_WITHOUT_EPG = True  # True-跳过无EPG的频道, False-保留频道标签
 ```
+
+### 🔗 外部 M3U 合并配置
+
+支持从外部 M3U 源下载并合并指定分组的频道到生成的 M3U 文件中，可以用于补充本地频道列表中没有的频道（如粤语频道、冰茶体育）。
+
+```python
+# 外部 M3U 合并配置
+EXTERNAL_M3U_URL = "https://bc.188766.xyz/?ip=&mishitong=true&mima=mianfeibuhuaqian&json=true"  # 外部 M3U 下载链接
+EXTERNAL_GROUP_TITLES = ["粤语频道"]  # 要提取的 group-title 列表，例如: ["冰茶体育", "粤语频道"]
+ENABLE_EXTERNAL_M3U_MERGE = True  # 是否合并外部 M3U 到所有 M3U 文件 (True/False)
+```
+
+**配置说明**：
+- **EXTERNAL_M3U_URL**：外部 M3U 文件的下载地址，支持 HTTP/HTTPS 协议
+- **EXTERNAL_GROUP_TITLES**：要提取的频道分组列表，脚本会从外部 M3U 中提取这些 `group-title` 的频道
+- **ENABLE_EXTERNAL_M3U_MERGE**：是否启用外部 M3U 合并功能，设置为 `False` 可禁用此功能
+
+**功能特性**：
+- ✅ 自动下载外部 M3U 文件（使用浏览器 User-Agent 避免 403 错误）
+- ✅ 按 `group-title` 过滤提取指定分组的频道
+- ✅ 自动应用黑名单过滤规则
+- ✅ 支持 Nginx 代理（如果设置了 `NGINX_PROXY_PREFIX`，外部频道的 URL 和 Logo 会自动通过代理）
+- ✅ 智能排序：如果外部分组在 `GROUP_OUTPUT_ORDER` 中，会按顺序输出；否则会添加到 M3U 文件末尾
+- ✅ 合并到所有生成的 M3U 文件（tv.m3u、tv2.m3u、ku9.m3u）
+
+**⚠️ 注意事项**：
+- 如果外部分组名称在 `GROUP_OUTPUT_ORDER` 中已存在，外部频道会合并到对应分组位置
+- 如果外部分组名称不在 `GROUP_OUTPUT_ORDER` 中，外部频道会添加到 M3U 文件末尾
+- 外部频道同样会应用黑名单过滤规则
+- 外部频道的 Logo 和 URL 会自动应用 Nginx 代理（如果已配置）
 
 ### 🚫 黑名单配置
 
