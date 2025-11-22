@@ -35,7 +35,7 @@ NGINX_PROXY_PREFIX = ""  # 针对外网播放的nginx代理
 JSON_URL = "http://183.235.16.92:8082/epg/api/custom/getAllChannel.json" # JSON 文件下载 URL  这个地址有晴彩
 
 #  EPG 地址配置 - 可自定义修改
-M3U_EPG_URL = "http://debian.bennq.top:6789/t.xml.gz"  # 请修改为你的实际 EPG 地址
+M3U_EPG_URL = "http://c.cc.top:1239/t.xml.gz"  # 请修改为你的实际 EPG 地址
 # (新增) EPG 下载源地址 (可以配置多个, 任务会自动分配)
 EPG_BASE_URLS = [
     "http://183.235.16.92:8082/epg/api/channel/",
