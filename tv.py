@@ -6,8 +6,8 @@ import io
 import requests
 import sys
 import gzip
-import time  #  添加时间模块用于重试等待
-import threading  # <--- 在这里添加
+import time 
+import threading 
 from urllib.parse import urljoin, urlparse
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
@@ -30,12 +30,14 @@ TV2_M3U_FILENAME = "tv2.m3u"      # 转单播地址列表文件
 KU9_M3U_FILENAME = "ku9.m3u"      #  KU9回看参数格式文件
 XML_FILENAME = "t.xml"            # XML节目单文件
 REPLACEMENT_IP = "http://c.cc.top:7088/udp"  # UDPXY地址，
+REPLACEMENT_IP_TV = ""  # tv.m3u 专用的 UDPXY 地址（默认为空，使用原始地址）
 CATCHUP_SOURCE_PREFIX = "http://183.235.162.80:6610/190000002005"  # 回看源前缀，
 NGINX_PROXY_PREFIX = ""  # 针对外网播放的nginx代理
+ENABLE_NGINX_PROXY_FOR_TV = False  # tv.m3u 是否使用 NGINX_PROXY_PREFIX 代理（默认 False）
 JSON_URL = "http://183.235.16.92:8082/epg/api/custom/getAllChannel.json" # JSON 文件下载 URL  这个地址有晴彩
 
 #  EPG 地址配置 - 可自定义修改
-M3U_EPG_URL = "http://c.cc.top:1239/t.xml.gz"  # 请修改为你的实际 EPG 地址
+M3U_EPG_URL = "https://epg.112114.xyz/pp.xml.gzz"  # 请修改为你的实际 EPG 地址
 # (新增) EPG 下载源地址 (可以配置多个, 任务会自动分配)
 EPG_BASE_URLS = [
     "http://183.235.16.92:8082/epg/api/channel/",
@@ -59,12 +61,10 @@ ENABLE_EXTERNAL_M3U_MERGE = True  # 是否合并外部 M3U 到所有 M3U 文件 
 BLACKLIST_RULES = {
     "title": ["测试频道", "购物", "导视", "百视通", "指南", "精选频道"],
     "code": [
-        # 在这里添加要过滤的频道代码
-        # "02000006000000052022060699000003",
+             # "02000006000000052022060699000003",
     ],
     "zteurl": [
-        # 在这里添加要过滤的播放链接
-        # "rtp://239.21.0.137:3892",
+              # "rtp://239.21.0.137:3892",
     ]
 }
 
@@ -97,12 +97,12 @@ CHANNEL_NAME_MAP = {
 }
 
 # EPG 下载开关:
-ENABLE_EPG_DOWNLOAD = True  # True - 启用EPG下载和生成  False - 跳过EPG下载（方便调试）
+ENABLE_EPG_DOWNLOAD = True  # True - 启用EPG下载和生成  False - 跳过EPG下载
 
 # EPG 下载模式:
 EPG_DOWNLOAD_MODE = "M3U_ONLY"  # 默认修改为 "M3U_ONLY"  "M3U_ONLY"  - 仅下载和合成 M3U 文件中实际包含的频道 )  "ALL" - 下载和合成所有可用频道（包括被 M3U 过滤掉的)
 
-# EPG 合成模式: (针对 "如果有些频道epg为空..." 的需求)
+# EPG 合成模式: 
 # True  - (推荐) 仅当频道有节目数据时才将其写入 XML。这可能导致播放器无法映射频道名称。方便iptool整合  False - (不推荐) 即使频道没有节目数据也写入 <channel> 标签 (用于频道名称/图标映射)，只是不包含 <programme> 标签。
 XML_SKIP_CHANNELS_WITHOUT_EPG = True # 默认为 True
 
@@ -219,6 +219,7 @@ def ensure_url_scheme(url, default_scheme='http'):
         return url
 # 应用规范化
 REPLACEMENT_IP_NORM = normalize_url(REPLACEMENT_IP, trailing_slash='add')
+REPLACEMENT_IP_TV_NORM = normalize_url(REPLACEMENT_IP_TV, trailing_slash='add') if REPLACEMENT_IP_TV else ""
 CATCHUP_SOURCE_PREFIX_NORM = normalize_url(CATCHUP_SOURCE_PREFIX, trailing_slash='remove')
 NGINX_PROXY_PREFIX_NORM = normalize_url(NGINX_PROXY_PREFIX, trailing_slash='add')
 
@@ -230,7 +231,6 @@ def clean_tvg_id(title):
     return cleaned.strip()
 
 def apply_channel_name_mapping(channel, base_name):
-    """应用频道名称映射，返回最终名称"""
     # 如果标题在映射表中，直接返回映射后的名称
     if channel["title"] in CHANNEL_NAME_MAP:
         return CHANNEL_NAME_MAP[channel["title"]]
@@ -250,8 +250,13 @@ def apply_channel_name_mapping(channel, base_name):
 def print_configuration():
     """打印当前使用的配置"""
     print(f"你的组播转单播UDPXY地址是 {REPLACEMENT_IP_NORM}")
+    if REPLACEMENT_IP_TV_NORM:
+        print(f"tv.m3u 专用的UDPXY地址是 {REPLACEMENT_IP_TV_NORM}")
+    else:
+        print(f"tv.m3u 使用原始地址（未配置 REPLACEMENT_IP_TV）")
     print(f"你的回看源前缀是 {CATCHUP_SOURCE_PREFIX_NORM}")
     print(f"你的nginx代理前缀是 {NGINX_PROXY_PREFIX_NORM}")
+    print(f"tv.m3u 使用nginx代理: {'是' if ENABLE_NGINX_PROXY_FOR_TV else '否'}")
     print(f"你的回看URL模板是 {CATCHUP_URL_TEMPLATE}")
     print(f"你的KU9回看URL模板是 {CATCHUP_URL_KU9}")
     print(f"EPG下载开关: {'启用' if ENABLE_EPG_DOWNLOAD else '禁用'}")
@@ -294,7 +299,6 @@ def download_json_data(url):
 
 def categorize_channel(title):
     """(重构) 根据 GROUP_CLASSIFICATION_PRIORITY 列表的顺序为频道分类"""
-    
     # 按照 "分类优先级" 列表的顺序
     for group_name in GROUP_CLASSIFICATION_PRIORITY:
         # 从 GROUP_DEFINITIONS 获取该组的关键字
@@ -594,8 +598,6 @@ def add_custom_channels(grouped_channels, custom_channels):
     #  返回黑名单信息和已添加的频道列表
     return grouped_channels, blacklisted_custom_channels, added_custom_channels
 
-
-
 def download_epg_for_source(channels, base_url, total_channels, progress_counter, progress_lock):
     """
     (新增) 下载工作函数：从指定的 base_url 下载一组频道的 EPG 数据。
@@ -637,8 +639,6 @@ def download_epg_for_source(channels, base_url, total_channels, progress_counter
             progress_counter[0] += 1  # 增加共享计数器
             count = progress_counter[0]
             percent = (count / total_channels) * 100
-            
-            # 打印单行刷新的进度
             print(f"  下载进度: {count}/{total_channels} 个频道 ({percent:.1f}%)", end="\r", flush=True)
             
     return schedules_for_source
@@ -793,9 +793,6 @@ def _write_epg_files_and_stats(root, stats, output_file=XML_FILENAME):
     print(LOG_SEPARATOR)
 
 def download_and_save_all_schedules(channels_for_xml, output_file=XML_FILENAME):
-    """
-    (重构) 主协调函数：下载EPG数据，构建XML，并保存文件。
-    """
     # 1. 并行下载EPG数据
     all_schedules = _download_epg_data_parallel(channels_for_xml)
     
@@ -806,17 +803,11 @@ def download_and_save_all_schedules(channels_for_xml, output_file=XML_FILENAME):
     _write_epg_files_and_stats(xml_tree, stats, output_file)
 
 def run_epg_download(channels, custom_channels_config, grouped_channels):
-    """
-    执行 EPG 下载和生成的总函数
-    (修改版：支持 EPG_DOWNLOAD_MODE 开关)
-    """
     print("\n开始下载节目单...")
     
     all_channels_for_epg_download = [] # 用于生成下载URL的列表
     channels_to_write_to_xml = {}      # 用于写入XML的频道字典 (带分组)
-    
-    # --- (新增) EPG 下载模式切换 (需求 2) ---
-    
+      
     if EPG_DOWNLOAD_MODE == "M3U_ONLY":
         print("EPG 模式: M3U_ONLY (仅下载和合成 M3U 中的频道)")
         
@@ -878,18 +869,11 @@ def run_epg_download(channels, custom_channels_config, grouped_channels):
         total_xml_channels = sum(len(v) for v in channels_to_write_to_xml.values())
         print(f"XML 文件将包含 {total_xml_channels} 个频道 (包括被 M3U 过滤的)。")
     
-    # --- 切换结束 ---
-
     # 使用 'channels_to_write_to_xml' 列表来生成 XML
     download_and_save_all_schedules(channels_to_write_to_xml)
     # --- EPG 函数内容结束 ---
 
 def download_external_m3u(url):
-    """
-    下载外部 M3U 文件（使用浏览器头部模拟浏览器请求）
-    :param url: M3U 文件的下载链接
-    :return: M3U 文件内容（字符串）或 None
-    """
     try:
         print(f"正在下载外部 M3U 文件: {url}")
         # 模拟浏览器的 HTTP 头部信息，避免 403 Forbidden 错误
@@ -918,9 +902,6 @@ def download_external_m3u(url):
 def parse_m3u_content(m3u_content, target_groups):
     """
     解析 M3U 内容，提取指定 group-title 的频道，并应用黑名单过滤
-    :param m3u_content: M3U 文件内容（字符串）
-    :param target_groups: 要提取的 group-title 列表
-    :return: (提取的频道列表, 被过滤的黑名单频道列表)
     """
     if not m3u_content or not target_groups:
         return [], []
@@ -1010,11 +991,9 @@ def parse_m3u_content(m3u_content, target_groups):
         print(f"已过滤 {len(blacklisted_channels)} 个黑名单外部频道")
     return channels, blacklisted_channels
 
-def build_external_extinf_line(channel):
+def build_external_extinf_line(channel, use_proxy=True):
     """
     构建外部频道的 EXTINF 行，应用 NGINX_PROXY_PREFIX 到 tvg-logo
-    :param channel: 外部频道字典，包含 extinf_line, attributes 和 title
-    :return: 重建的 EXTINF 行（应用了代理的 tvg-logo）
     """
     # 获取原始 EXTINF 行和属性
     original_line = channel.get('extinf_line', '')
@@ -1025,9 +1004,9 @@ def build_external_extinf_line(channel):
     if 'tvg-logo' not in attributes:
         return original_line
     
-    # 处理 tvg-logo，应用 NGINX_PROXY_PREFIX（如果设置）
+    # 处理 tvg-logo，应用 NGINX_PROXY_PREFIX（如果设置且允许使用代理）
     logo_url = attributes['tvg-logo']
-    if NGINX_PROXY_PREFIX_NORM and logo_url:
+    if use_proxy and NGINX_PROXY_PREFIX_NORM and logo_url:
         # 提取图标的路径部分
         if logo_url.startswith('http://'):
             logo_path = logo_url[7:]
@@ -1052,13 +1031,14 @@ def build_external_extinf_line(channel):
     # 如果不需要代理，返回原始行
     return original_line
 
-def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP_URL_TEMPLATE, external_channels=None):
+def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP_URL_TEMPLATE, external_channels=None, is_tv_m3u=False):
     """
     生成 M3U 内容
     :param grouped_channels: 本地频道分组字典
     :param replace_url: 是否替换 URL（组播转单播）
     :param catchup_template: 回看 URL 模板
     :param external_channels: 外部频道列表（可选），如果提供则合并到 M3U
+    :param is_tv_m3u: 是否为 tv.m3u 文件（影响 URL 替换、代理使用和 ztecode 参数）
     :return: M3U 文件内容（字符串）
     """
     if M3U_EPG_URL:
@@ -1072,8 +1052,9 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
     # 默认使用原始回看前缀
     final_catchup_prefix = CATCHUP_SOURCE_PREFIX_NORM
     
-    # 如果设置了代理前缀，并且回看前缀也存在
-    if NGINX_PROXY_PREFIX_NORM and CATCHUP_SOURCE_PREFIX_NORM:
+    # 如果设置了代理前缀，并且回看前缀也存在（tv.m3u 需要检查开关）
+    use_proxy_for_this_file = NGINX_PROXY_PREFIX_NORM and (not is_tv_m3u or ENABLE_NGINX_PROXY_FOR_TV)
+    if use_proxy_for_this_file and CATCHUP_SOURCE_PREFIX_NORM:
         # 提取回看源的路径部分（去除协议和域名）
         if CATCHUP_SOURCE_PREFIX_NORM.startswith('http://'):
             catchup_path = CATCHUP_SOURCE_PREFIX_NORM[7:]
@@ -1114,15 +1095,15 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
         # 如果该分组在 GROUP_OUTPUT_ORDER 中且有外部频道，先输出外部频道
         if group in external_groups_in_order and group in external_channels_by_group:
             for channel in external_channels_by_group[group]:
-                # 构建 EXTINF 行（应用 NGINX_PROXY_PREFIX 到 tvg-logo）
-                extinf_line = build_external_extinf_line(channel)
+                # 构建 EXTINF 行（应用 NGINX_PROXY_PREFIX 到 tvg-logo，tv.m3u 需要检查开关）
+                extinf_line = build_external_extinf_line(channel, use_proxy_for_this_file)
                 content.append(extinf_line)
                 # 添加额外的属性行（如 #EXTVLCOPT, #KODIPROP 等）
                 for extra_line in channel.get('extra_lines', []):
                     content.append(extra_line)
-                # 处理外部频道 URL，应用 NGINX_PROXY_PREFIX（如果设置）
+                # 处理外部频道 URL，应用 NGINX_PROXY_PREFIX（如果设置，tv.m3u 需要检查开关）
                 external_url = channel['url']
-                if NGINX_PROXY_PREFIX_NORM and external_url:
+                if use_proxy_for_this_file and external_url:
                     # 提取 URL 的路径部分
                     if external_url.startswith('http://'):
                         url_path = external_url[7:]
@@ -1147,8 +1128,47 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
             if not ch.get("zteurl"):
                 continue
                     
-            # 修复的URL替换逻辑 - 使用更健壮的方法
-            if replace_url:
+# 修复的URL替换逻辑 - 使用更健壮的方法
+            # tv.m3u 使用 REPLACEMENT_IP_TV（如果配置），否则使用原始地址
+            if is_tv_m3u and REPLACEMENT_IP_TV_NORM:
+                # tv.m3u 使用专用的 REPLACEMENT_IP_TV，将组播地址作为 channel 参数
+                # 获取前缀
+                current_prefix = REPLACEMENT_IP_TV_NORM              
+                # 检测并修复：如果配置的是 PHP 参数 (如 channel=)，normalize_url 会将其变成 channel=/
+                # 这里判断如果前缀以 =/ 结尾，就移除最后的 /
+                if current_prefix.endswith('=/'):
+                    current_prefix = current_prefix[:-1]
+                # =========== 修改结束 ===========
+
+                original_url = ch["zteurl"]
+                parsed_original = urlparse(original_url)
+
+                # 提取组播地址（IP:端口）作为 channel 参数值
+                if parsed_original.scheme in ["rtp", "rtsp"]:
+                    # 对于 rtp://239.20.0.104:2006，提取 239.20.0.104:2006
+                    address_part = parsed_original.netloc
+                    # 如果有路径，也包含进去（虽然组播地址通常没有路径）
+                    if parsed_original.path:
+                        address_part += parsed_original.path
+                    # 注意：这里把 REPLACEMENT_IP_TV_NORM 换成了 current_prefix
+                    url = current_prefix + address_part
+                elif parsed_original.scheme in ["http", "https"]:
+                    # 对于 http/https，也提取 netloc 作为参数
+                    address_part = parsed_original.netloc
+                    if parsed_original.path:
+                        address_part += parsed_original.path
+                    # 注意：这里把 REPLACEMENT_IP_TV_NORM 换成了 current_prefix
+                    url = current_prefix + address_part
+                elif not parsed_original.scheme:
+                    # 对于没有 scheme 的地址（如 "239.21.0.88:3692"），直接使用
+                    # 注意：这里把 REPLACEMENT_IP_TV_NORM 换成了 current_prefix
+                    url = current_prefix + original_url
+                else:
+                    # For unknown schemes (e.g., 'foo://...'), keep the original
+                    url = original_url
+
+            elif replace_url:
+                # 其他文件使用标准的 REPLACEMENT_IP
                 original_url = ch["zteurl"]
                 parsed_original = urlparse(original_url)
 
@@ -1169,8 +1189,8 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
             # 改进的图标URL处理（使用简单字符串拼接，兼容性更好）
             logo_url = ch.get("icon", "")
             if logo_url:
-                # 如果设置了代理前缀，则通过代理访问
-                if NGINX_PROXY_PREFIX_NORM:
+                # 如果设置了代理前缀，则通过代理访问（tv.m3u 需要检查开关）
+                if use_proxy_for_this_file:
                     # 提取图标的路径部分
                     if logo_url.startswith('http://'):
                         logo_path = logo_url[7:]
@@ -1198,6 +1218,12 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
                 f'tvg-name="{ch.get("original_title", ch["title"])}"',
                 f'tvg-logo="{logo_url}"'
             ]
+            
+            # tv.m3u 添加 ztecode 参数
+            if is_tv_m3u:
+                ztecode = ch.get("ztecode", "")
+                if ztecode:
+                    extinf_parts.append(f'ztecode="{ztecode}"')
             
             # 只有当频道支持回看时才添加catchup属性
             if ch.get("supports_catchup", False):
@@ -1228,15 +1254,15 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
         for group_title in sorted(external_groups_not_in_order):
             if group_title in external_channels_by_group:
                 for channel in external_channels_by_group[group_title]:
-                    # 构建 EXTINF 行（应用 NGINX_PROXY_PREFIX 到 tvg-logo）
-                    extinf_line = build_external_extinf_line(channel)
+                    # 构建 EXTINF 行（应用 NGINX_PROXY_PREFIX 到 tvg-logo，tv.m3u 需要检查开关）
+                    extinf_line = build_external_extinf_line(channel, use_proxy_for_this_file)
                     content.append(extinf_line)
                     # 添加额外的属性行（如 #EXTVLCOPT, #KODIPROP 等）
                     for extra_line in channel.get('extra_lines', []):
                         content.append(extra_line)
-                    # 处理外部频道 URL，应用 NGINX_PROXY_PREFIX（如果设置）
+                    # 处理外部频道 URL，应用 NGINX_PROXY_PREFIX（如果设置，tv.m3u 需要检查开关）
                     external_url = channel['url']
-                    if NGINX_PROXY_PREFIX_NORM and external_url:
+                    if use_proxy_for_this_file and external_url:
                         # 提取 URL 的路径部分
                         if external_url.startswith('http://'):
                             url_path = external_url[7:]
@@ -1258,7 +1284,6 @@ def generate_m3u_content(grouped_channels, replace_url, catchup_template=CATCHUP
     return '\n'.join(content)
 
 def main():
-    """脚本的主入口点。"""
     # 打印当前使用的配置
     print_configuration()
     
@@ -1280,12 +1305,10 @@ def main():
     
     # 处理频道（去重、名称映射等）
     kept_channels, blacklisted_main_channels, removed_channels = process_channels(channels)
-    
-    # (--- 修改：动态生成 grouped_channels ---)
+
     grouped_channels = {group: [] for group in GROUP_DEFINITIONS.keys()}
 
-    # ==================== 代码修改区域开始 ====================
-    
+
     skipped_url_count = 0 # 用于统计跳过的频道
 
     for channel in kept_channels:
@@ -1370,12 +1393,12 @@ def main():
     all_blacklisted_channels = blacklisted_main_channels + blacklisted_custom_channels + blacklisted_external_channels
 
     #  生成M3U文件 - 现在生成三个文件（如果启用了外部合并，所有文件都会包含外部频道）
-    for filename, replace_url, catchup_template in [
-        (TV_M3U_FILENAME, False, CATCHUP_URL_TEMPLATE),      # 组播地址，标准回看模板
-        (TV2_M3U_FILENAME, True, CATCHUP_URL_TEMPLATE),      # 单播地址，标准回看模板
-        (KU9_M3U_FILENAME, True, CATCHUP_URL_KU9)           #  单播地址，KU9回看模板
+    for filename, replace_url, catchup_template, is_tv_m3u in [
+        (TV_M3U_FILENAME, False, CATCHUP_URL_TEMPLATE, True),      # 组播地址，标准回看模板，tv.m3u 特殊处理
+        (TV2_M3U_FILENAME, True, CATCHUP_URL_TEMPLATE, False),      # 单播地址，标准回看模板
+        (KU9_M3U_FILENAME, True, CATCHUP_URL_KU9, False)           #  单播地址，KU9回看模板
     ]:
-        content = generate_m3u_content(grouped_channels, replace_url, catchup_template, external_channels)
+        content = generate_m3u_content(grouped_channels, replace_url, catchup_template, external_channels, is_tv_m3u)
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(content)
         external_count = len(external_channels) if external_channels else 0
