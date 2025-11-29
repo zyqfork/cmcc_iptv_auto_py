@@ -452,11 +452,14 @@ opkg install nginx
 ```bash
 cat > /etc/nginx/conf.d/nginx-proxy.conf << 'EOF'
 server {
-    listen 7077;
-    listen [::]:7077;
+    listen 7077 reuseport;
+    listen [::]:7077 reuseport;
     
-    # 解析器设置
     resolver 10.10.10.1;
+    
+    # TCP优化 - 针对直播流
+    tcp_nodelay on;     # 重要：减少直播延迟
+    tcp_nopush off;     # 关闭：避免增加直播延迟
     
     # 通用代理 - 支持任意目标地址
     location ~* "^/(?<target_host>[^/]+)(?<target_path>.*)$" {
@@ -469,10 +472,17 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        proxy_connect_timeout 30s;
-        proxy_send_timeout 600s;
-        proxy_read_timeout 600s;
-        proxy_buffering off;
+
+        # 添加重定向处理
+        proxy_redirect http://$target_host/ http://$host:7077/$target_host/;
+        proxy_redirect ~^http://([^:]+):?(\d*)/(.*)$ http://$host:7077/$1:$2/$3;
+
+        
+        proxy_connect_timeout 15s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_buffering off;            # 关键：直播流禁用缓冲
+        proxy_cache off;
     }
 }
 EOF
