@@ -22,8 +22,8 @@
 脚本会生成3个M3U文件：
 
 1. **tv.m3u**：组播地址列表（原始组播地址）
-2. **tv2.m3u**：单播地址列表（通过msd_lite转换的组播地址，默认回看参数支持ok影视,mytv-android[电视直播]）
-3. **ku9.m3u**：单播地址列表（回看参数格式只支持 酷9 1.76+）
+2. **tv2.m3u**：单播地址列表（通过msd_lite转换的组播地址，回看参数支持ok影视,mytv-android[电视直播]）
+3. **ku9.m3u**：单播地址列表（回看参数格式支持 酷9 1.76+,支持ios-APTV）
 
 ### 📺 EPG节目单
 
@@ -111,11 +111,13 @@ ENABLE_EXTERNAL_M3U_MERGE = True  # 是否合并外部 M3U 到所有 M3U 文件 
 ```
 
 **配置说明**：
+
 - **EXTERNAL_M3U_URL**：外部 M3U 文件的下载地址，支持 HTTP/HTTPS 协议
 - **EXTERNAL_GROUP_TITLES**：要提取的频道分组列表，脚本会从外部 M3U 中提取这些 `group-title` 的频道
 - **ENABLE_EXTERNAL_M3U_MERGE**：是否启用外部 M3U 合并功能，设置为 `False` 可禁用此功能
 
 **功能特性**：
+
 - ✅ 自动下载外部 M3U 文件（使用浏览器 User-Agent 避免 403 错误）
 - ✅ 按 `group-title` 过滤提取指定分组的频道
 - ✅ 自动应用黑名单过滤规则
@@ -124,6 +126,7 @@ ENABLE_EXTERNAL_M3U_MERGE = True  # 是否合并外部 M3U 到所有 M3U 文件 
 - ✅ 合并到所有生成的 M3U 文件（tv.m3u、tv2.m3u、ku9.m3u）
 
 **⚠️ 注意事项**：
+
 - 如果外部分组名称在 `GROUP_OUTPUT_ORDER` 中已存在，外部频道会合并到对应分组位置
 - 如果外部分组名称不在 `GROUP_OUTPUT_ORDER` 中，外部频道会添加到 M3U 文件末尾
 - 外部频道同样会应用黑名单过滤规则
@@ -415,6 +418,7 @@ ip route | grep 183.235
 ### 🌐 实现浏览器访问
 
 测试JSON数据源是否可访问：
+
 - [http://183.235.16.92:8082/epg/api/custom/getAllChannel.json](http://183.235.16.92:8082/epg/api/custom/getAllChannel.json)
 
 ### ⏪ 实现回看测试
@@ -424,8 +428,6 @@ ip route | grep 183.235
 ```
 http://183.235.162.80:6610/190000002005/ch000000000000329/index.m3u8?starttime=20251118100000&endtime=20251118112000
 ```
-
-
 
 ## 🌐 Nginx代理配置（外网访问）
 
@@ -447,6 +449,7 @@ opkg install nginx
 ### 3. 🔧 配置Nginx代理
 
 创建代理配置文件：
+
 - 解析器设置为自己的 OpenWrt IP，也就是 DNS，可设为 223.5.5.5。
 
 ```bash
@@ -454,37 +457,37 @@ cat > /etc/nginx/conf.d/nginx-proxy.conf << 'EOF'
 server {
     listen 7077 reuseport;
     listen [::]:7077 reuseport;
-    
+  
     # 优先用本机回环，更稳更科学
     resolver 127.0.0.1 10.10.10.1 valid=30s;
-    
+  
     # TCP优化
     tcp_nodelay on;      # 重要：减少直播延迟
     tcp_nopush off;      # 关闭：避免增加直播延迟
-    
+  
     # 通用代理 - 支持任意目标地址
     location ~* "^/(?<target_host>[^/]+)(?<target_path>.*)$" {
 
         set $proxy_target "http://$target_host$target_path$is_args$args";
-        
+      
         proxy_pass $proxy_target;
-        
+      
         proxy_set_header Host $target_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+      
         # 核心重定向修复：一条正则足矣
         # 捕获 http://IP:端口/剩余部分 -> 重写为 http://你的域名:7077/IP:端口/剩余部分
         proxy_redirect ~^http://([^/]+)/(.*)$ http://$host:$server_port/$1/$2;
 
-        
+      
         proxy_connect_timeout 15s;
         proxy_send_timeout 30s;
         proxy_read_timeout 60s;
-        
+      
         # 直播核心设置：关缓冲
-        proxy_buffering off;            
+        proxy_buffering off;          
         proxy_cache off;
     }
 }
