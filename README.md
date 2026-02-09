@@ -295,7 +295,6 @@ EPG 合成统计
 
   - 部分光猫也可以全走vlan,就是 默认 iptv vlan 是48 internet 是41, 光猫 lan1取消全部绑定,光猫绑定设置哪里 48/48 41/41 这样就是划, openwrt 就是eth1.48 eth1.41
 
-  光猫iptv绑定lan1,绑定设置哪里,lan1,只设置 41/41,不对iptv vlan 划分,就是iptv直出,openwrt,iptv接口直接用 eth1
 - **⚙️ 路由器配置**：wan口上网用vlan就是eth1.3，新建iptv口不用vlan，设置就是eth1，iptv口为br-iptv(dhcp模式)，桥接eth2,机顶盒接端口3就是桥接br-iptv网络,可以正常使用
 - **🔐 鉴权设置**：由于实测移动iptv不鉴权，所以没有针对设置hostname、mac地址、Vendor class identifier设置
 
